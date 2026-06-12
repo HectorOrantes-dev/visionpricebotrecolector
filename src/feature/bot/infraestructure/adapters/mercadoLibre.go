@@ -63,6 +63,7 @@ func (a *MLProductFetcherAdapter) FetchByCategory(ctx context.Context, category 
 	if err != nil {
 		return nil, err
 	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36")
 
 	resp, err := a.client.Do(req)
 	if err != nil {
@@ -101,6 +102,7 @@ func (a *MLProductFetcherAdapter) FetchItemDescription(ctx context.Context, mlID
 	if err != nil {
 		return "", err
 	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36")
 
 	resp, err := a.client.Do(req)
 	if err != nil {
