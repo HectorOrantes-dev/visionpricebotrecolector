@@ -6,12 +6,14 @@ import (
 
 	"github.com/HectorOrantes-dev/visionpricebotrecolector/src/feature/bot/application"
 	"github.com/HectorOrantes-dev/visionpricebotrecolector/src/feature/bot/infraestructure/adapters"
+	"github.com/HectorOrantes-dev/visionpricebotrecolector/src/feature/bot/infraestructure/controllers"
 )
 
 type Container struct {
 	Repo                        *adapters.SupabaseRepositoryAdapter
 	Fetcher                     *adapters.MLProductFetcherAdapter
 	FetchAndSaveProductsUseCase *application.FetchAndSaveProductsUseCase
+	BotController               *controllers.BotController
 }
 
 func NewContainer(db *sql.DB) *Container {
@@ -27,9 +29,13 @@ func NewContainer(db *sql.DB) *Container {
 	// Instantiate UseCase
 	useCase := application.NewFetchAndSaveProductsUseCase(repo, fetcher)
 
+	// Instantiate Controller
+	botController := controllers.NewBotController(useCase)
+
 	return &Container{
 		Repo:                        repo,
 		Fetcher:                     fetcher,
 		FetchAndSaveProductsUseCase: useCase,
+		BotController:               botController,
 	}
 }
