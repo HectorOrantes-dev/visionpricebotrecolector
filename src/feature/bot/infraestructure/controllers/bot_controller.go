@@ -17,6 +17,27 @@ func NewBotController(useCase *application.FetchAndSaveProductsUseCase) *BotCont
 	}
 }
 
+func (c *BotController) HandleRoot(w http.ResponseWriter, req *http.Request) {
+	if req.URL.Path != "/" {
+		http.NotFound(w, req)
+		return
+	}
+
+	if req.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":      "running",
+		"message":     "Vision Price Bot Recolector is active.",
+		"endpoints":   []string{"/health", "/sync"},
+		"description": "Trigger manual synchronization by visiting /sync?category=your_category",
+	})
+}
+
 func (c *BotController) HandleHealth(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)

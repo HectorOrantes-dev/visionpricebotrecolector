@@ -17,6 +17,7 @@ func NewRouter(container *dependencies_bot.Container) *Router {
 }
 
 func (r *Router) RegisterRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("/", r.container.BotController.HandleRoot)
 	mux.HandleFunc("/health", r.container.BotController.HandleHealth)
 	mux.HandleFunc("/sync", r.container.BotController.HandleSync)
 }
