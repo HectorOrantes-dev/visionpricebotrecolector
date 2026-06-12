@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/HectorOrantes-dev/visionpricebotrecolector/src/feature/bot/domain/entities"
@@ -19,6 +20,11 @@ type SupabaseRepositoryAdapter struct {
 }
 
 func NewSupabaseRepositoryAdapter(apiURL, apiKey string) *SupabaseRepositoryAdapter {
+	// Trim trailing slashes and rest/v1 path if present
+	apiURL = strings.TrimSuffix(apiURL, "/")
+	apiURL = strings.TrimSuffix(apiURL, "/rest/v1")
+	apiURL = strings.TrimSuffix(apiURL, "/")
+
 	return &SupabaseRepositoryAdapter{
 		client: &http.Client{
 			Timeout: 10 * time.Second,
