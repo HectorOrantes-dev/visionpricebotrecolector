@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/HectorOrantes-dev/visionpricebotrecolector/src/core"
 	"github.com/HectorOrantes-dev/visionpricebotrecolector/src/feature/bot/infraestructure/dependencies_bot"
 	"github.com/HectorOrantes-dev/visionpricebotrecolector/src/feature/bot/infraestructure/routers"
 	"github.com/joho/godotenv"
@@ -22,17 +23,17 @@ func main() {
 		log.Println("No .env file found or error loading, relying on system environment variables")
 	}
 
+	// Initialize core shared database
+	core.InitPostgres()
+	if core.DB != nil {
+		defer core.DB.Close()
+	}
+
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// Initialize dependencies container
-	container, err := dependencies_bot.NewContainer(ctx)
-	if err != nil {
-		log.Fatalf("Failed to initialize dependencies: %v", err)
-	}
-	defer container.Close()
-
-	log.Println("Database connection pool initialized successfully")
+	// Initialize dependencies container using core database connection
+	container := dependencies_bot.NewContainer(core.DB)
 
 	// Initialize background cron scheduler
 	c := cron.New()
@@ -46,7 +47,7 @@ func main() {
 		syncCategory = "materiales de construccion"
 	}
 
-	_, err = c.AddFunc(cronExpr, func() {
+	_, err := c.AddFunc(cronExpr, func() {
 		log.Printf("Starting scheduled sync for category: %s\n", syncCategory)
 		bgCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer cancel()

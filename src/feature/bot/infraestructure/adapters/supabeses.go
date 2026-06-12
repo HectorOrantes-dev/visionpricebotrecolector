@@ -2,19 +2,19 @@ package adapters
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 
 	"github.com/HectorOrantes-dev/visionpricebotrecolector/src/feature/bot/domain/entities"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type SupabaseRepositoryAdapter struct {
-	pool *pgxpool.Pool
+	db *sql.DB
 }
 
-func NewSupabaseRepositoryAdapter(pool *pgxpool.Pool) *SupabaseRepositoryAdapter {
+func NewSupabaseRepositoryAdapter(db *sql.DB) *SupabaseRepositoryAdapter {
 	return &SupabaseRepositoryAdapter{
-		pool: pool,
+		db: db,
 	}
 }
 
@@ -30,7 +30,7 @@ func (r *SupabaseRepositoryAdapter) Upsert(ctx context.Context, product *entitie
 			categoria = EXCLUDED.categoria
 		RETURNING id;
 	`
-	err := r.pool.QueryRow(ctx, query,
+	err := r.db.QueryRowContext(ctx, query,
 		product.ID,
 		product.MLID,
 		product.Nombre,
@@ -53,7 +53,7 @@ func (r *SupabaseRepositoryAdapter) SaveSnapshot(ctx context.Context, snapshot *
 		INSERT INTO price_snapshots (id, product_id, precio, moneda, fetched_at)
 		VALUES ($1, $2, $3, $4, $5);
 	`
-	_, err := r.pool.Exec(ctx, query,
+	_, err := r.db.ExecContext(ctx, query,
 		snapshot.ID,
 		snapshot.ProductID,
 		snapshot.Precio,
@@ -73,7 +73,7 @@ func (r *SupabaseRepositoryAdapter) ListByCategory(ctx context.Context, category
 		FROM products
 		WHERE categoria = $1;
 	`
-	rows, err := r.pool.Query(ctx, query, category)
+	rows, err := r.db.QueryContext(ctx, query, category)
 	if err != nil {
 		return nil, fmt.Errorf("error querying products by category: %w", err)
 	}
