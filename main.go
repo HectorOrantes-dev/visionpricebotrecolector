@@ -62,6 +62,18 @@ func main() {
 	defer c.Stop()
 	log.Printf("Scheduler started. Sync task registered with cron: '%s'\n", cronExpr)
 
+	// Run initial synchronization on startup asynchronously
+	go func() {
+		log.Printf("Starting initial startup sync for category: '%s'...\n", syncCategory)
+		bgCtx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+		defer cancel()
+		if err := container.FetchAndSaveProductsUseCase.Execute(bgCtx, syncCategory); err != nil {
+			log.Printf("Initial startup sync failed: %v\n", err)
+		} else {
+			log.Printf("Initial startup sync completed successfully.\n")
+		}
+	}()
+
 	// Setup HTTP Server
 	mux := http.NewServeMux()
 	router := routers.NewRouter(container)
