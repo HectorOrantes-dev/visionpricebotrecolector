@@ -1,105 +1,123 @@
 package adapters
 
 import (
+	"bytes"
 	"context"
-	"database/sql"
+	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/url"
+	"time"
 
 	"github.com/HectorOrantes-dev/visionpricebotrecolector/src/feature/bot/domain/entities"
 )
 
 type SupabaseRepositoryAdapter struct {
-	db *sql.DB
+	client *http.Client
+	apiURL string
+	apiKey string
 }
 
-func NewSupabaseRepositoryAdapter(db *sql.DB) *SupabaseRepositoryAdapter {
+func NewSupabaseRepositoryAdapter(apiURL, apiKey string) *SupabaseRepositoryAdapter {
 	return &SupabaseRepositoryAdapter{
-		db: db,
+		client: &http.Client{
+			Timeout: 10 * time.Second,
+		},
+		apiURL: apiURL,
+		apiKey: apiKey,
 	}
 }
 
-func (r *SupabaseRepositoryAdapter) Upsert(ctx context.Context, product *entities.Product) error {
-	query := `
-		INSERT INTO products (id, ml_id, nombre, descripcion, precio, moneda, categoria, created_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-		ON CONFLICT (ml_id) DO UPDATE
-		SET nombre = EXCLUDED.nombre,
-			descripcion = COALESCE(NULLIF(EXCLUDED.descripcion, ''), products.descripcion),
-			precio = EXCLUDED.precio,
-			moneda = EXCLUDED.moneda,
-			categoria = EXCLUDED.categoria
-		RETURNING id;
-	`
-	err := r.db.QueryRowContext(ctx, query,
-		product.ID,
-		product.MLID,
-		product.Nombre,
-		product.Descripcion,
-		product.Precio,
-		product.Moneda,
-		product.Categoria,
-		product.CreatedAt,
-	).Scan(&product.ID)
+func (r *SupabaseRepositoryAdapter) setHeaders(req *http.Request) {
+	req.Header.Set("apikey", r.apiKey)
+	req.Header.Set("Authorization", "Bearer "+r.apiKey)
+	req.Header.Set("Content-Type", "application/json")
+}
 
+func (r *SupabaseRepositoryAdapter) Upsert(ctx context.Context, product *entities.Product) error {
+	body, err := json.Marshal(product)
 	if err != nil {
-		return fmt.Errorf("error upserting product to database: %w", err)
+		return fmt.Errorf("error marshaling product: %w", err)
+	}
+
+	// PostgREST upsert URL with on_conflict param
+	reqURL := fmt.Sprintf("%s/rest/v1/products?on_conflict=ml_id", r.apiURL)
+	req, err := http.NewRequestWithContext(ctx, "POST", reqURL, bytes.NewBuffer(body))
+	if err != nil {
+		return fmt.Errorf("error creating request: %w", err)
+	}
+
+	r.setHeaders(req)
+	req.Header.Set("Prefer", "resolution=merge-duplicates")
+
+	resp, err := r.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("error executing request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		buf := new(bytes.Buffer)
+		_, _ = buf.ReadFrom(resp.Body)
+		return fmt.Errorf("unexpected status code from Supabase REST API: %d, response: %s", resp.StatusCode, buf.String())
 	}
 
 	return nil
 }
 
 func (r *SupabaseRepositoryAdapter) SaveSnapshot(ctx context.Context, snapshot *entities.PriceSnapshot) error {
-	query := `
-		INSERT INTO price_snapshots (id, product_id, precio, moneda, fetched_at)
-		VALUES ($1, $2, $3, $4, $5);
-	`
-	_, err := r.db.ExecContext(ctx, query,
-		snapshot.ID,
-		snapshot.ProductID,
-		snapshot.Precio,
-		snapshot.Moneda,
-		snapshot.FetchedAt,
-	)
+	body, err := json.Marshal(snapshot)
 	if err != nil {
-		return fmt.Errorf("error inserting price snapshot to database: %w", err)
+		return fmt.Errorf("error marshaling snapshot: %w", err)
+	}
+
+	reqURL := fmt.Sprintf("%s/rest/v1/price_snapshots", r.apiURL)
+	req, err := http.NewRequestWithContext(ctx, "POST", reqURL, bytes.NewBuffer(body))
+	if err != nil {
+		return fmt.Errorf("error creating request: %w", err)
+	}
+
+	r.setHeaders(req)
+
+	resp, err := r.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("error executing request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		buf := new(bytes.Buffer)
+		_, _ = buf.ReadFrom(resp.Body)
+		return fmt.Errorf("unexpected status code from Supabase REST API: %d, response: %s", resp.StatusCode, buf.String())
 	}
 
 	return nil
 }
 
 func (r *SupabaseRepositoryAdapter) ListByCategory(ctx context.Context, category string) ([]entities.Product, error) {
-	query := `
-		SELECT id, ml_id, nombre, descripcion, precio, moneda, categoria, created_at
-		FROM products
-		WHERE categoria = $1;
-	`
-	rows, err := r.db.QueryContext(ctx, query, category)
+	reqURL := fmt.Sprintf("%s/rest/v1/products?categoria=eq.%s", r.apiURL, url.QueryEscape(category))
+	req, err := http.NewRequestWithContext(ctx, "GET", reqURL, nil)
 	if err != nil {
-		return nil, fmt.Errorf("error querying products by category: %w", err)
+		return nil, fmt.Errorf("error creating request: %w", err)
 	}
-	defer rows.Close()
+
+	r.setHeaders(req)
+
+	resp, err := r.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("error executing request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		buf := new(bytes.Buffer)
+		_, _ = buf.ReadFrom(resp.Body)
+		return nil, fmt.Errorf("unexpected status code from Supabase REST API: %d, response: %s", resp.StatusCode, buf.String())
+	}
 
 	var products []entities.Product
-	for rows.Next() {
-		var p entities.Product
-		err := rows.Scan(
-			&p.ID,
-			&p.MLID,
-			&p.Nombre,
-			&p.Descripcion,
-			&p.Precio,
-			&p.Moneda,
-			&p.Categoria,
-			&p.CreatedAt,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("error scanning product row: %w", err)
-		}
-		products = append(products, p)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error during products iteration: %w", err)
+	if err := json.NewDecoder(resp.Body).Decode(&products); err != nil {
+		return nil, fmt.Errorf("error decoding response: %w", err)
 	}
 
 	return products, nil

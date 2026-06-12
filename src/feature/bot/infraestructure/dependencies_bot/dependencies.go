@@ -1,7 +1,6 @@
 package dependencies_bot
 
 import (
-	"database/sql"
 	"os"
 
 	"github.com/HectorOrantes-dev/visionpricebotrecolector/src/feature/bot/application"
@@ -16,14 +15,14 @@ type Container struct {
 	BotController               *controllers.BotController
 }
 
-func NewContainer(db *sql.DB) *Container {
+func NewContainer(supabaseURL, supabaseKey string) *Container {
 	siteID := os.Getenv("ML_SITE_ID")
 	if siteID == "" {
 		siteID = "MLM" // Default to Mexico
 	}
 
-	// Instantiate adapters using core.DB
-	repo := adapters.NewSupabaseRepositoryAdapter(db)
+	// Instantiate adapters using Supabase API credentials
+	repo := adapters.NewSupabaseRepositoryAdapter(supabaseURL, supabaseKey)
 	fetcher := adapters.NewMLProductFetcherAdapter(siteID)
 
 	// Instantiate UseCase

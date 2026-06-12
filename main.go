@@ -23,17 +23,14 @@ func main() {
 		log.Println("No .env file found or error loading, relying on system environment variables")
 	}
 
-	// Initialize core shared database
-	core.InitPostgres()
-	if core.DB != nil {
-		defer core.DB.Close()
-	}
+	// Initialize core Supabase API configuration
+	core.InitSupabase()
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// Initialize dependencies container using core database connection
-	container := dependencies_bot.NewContainer(core.DB)
+	// Initialize dependencies container using Supabase API keys
+	container := dependencies_bot.NewContainer(core.SupabaseURL, core.SupabaseKey)
 
 	// Initialize background cron scheduler
 	c := cron.New()
